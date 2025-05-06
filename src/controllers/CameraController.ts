@@ -6,38 +6,30 @@ export type CameraMode = 'view' | 'select'
 
 export class CameraController {
   private scene: BABYLON.Scene
-  private camera: BABYLON.ArcRotateCamera // FreeCameraからArcRotateCameraに戻す
+  private camera: BABYLON.FreeCamera // ArcRotateCameraからFreeCameraに変更
   private canvas: HTMLCanvasElement
   public mode: Ref<CameraMode>
-  private readonly CAMERA_DISTANCE = 15
-  private readonly CAMERA_HEIGHT_OFFSET = 5
+  private cameraOffset: BABYLON.Vector3
+  private initialRotationY: number
 
   constructor(scene: BABYLON.Scene, canvas: HTMLCanvasElement) {
     this.scene = scene
     this.canvas = canvas
     this.mode = ref<CameraMode>('select')
+    this.cameraOffset = new BABYLON.Vector3(0, 8, -15) // 後ろ上から見下ろす
+    this.initialRotationY = Math.PI
     this.camera = this.createCamera()
     this.setupModeToggle()
   }
 
-  private createCamera(): BABYLON.ArcRotateCamera {
-    const camera = new BABYLON.ArcRotateCamera(
-      'camera',
-      Math.PI, // 初期アングル（プレイヤーの後ろ）
-      Math.PI / 3, // 仰角（60度）
-      this.CAMERA_DISTANCE,
-      BABYLON.Vector3.Zero(),
-      this.scene,
-    )
+  private createCamera(): BABYLON.FreeCamera {
+    const camera = new BABYLON.FreeCamera('camera', this.cameraOffset.clone(), this.scene)
 
-    camera.lowerRadiusLimit = 10
-    camera.upperRadiusLimit = 30
-    camera.wheelDeltaPercentage = 0.01
-    camera.panningSensibility = 0 // パンニングを無効化
+    camera.rotationQuaternion = BABYLON.Quaternion.Identity()
+    camera.rotation.y = this.initialRotationY
 
-    // 回転の制限
-    camera.upperBetaLimit = Math.PI / 2 - 0.1 // ほぼ真上まで
-    camera.lowerBetaLimit = 0.1 // ほぼ水平まで
+    camera.minZ = 0.1
+    camera.maxZ = 1000
 
     camera.detachControl()
     return camera
@@ -59,35 +51,35 @@ export class CameraController {
   toggleMode(): void {
     this.mode.value = this.mode.value === 'view' ? 'select' : 'view'
     if (this.mode.value === 'view') {
-      // 視点操作モードの時のみカメラ操作を有効化
       this.camera.attachControl(this.canvas, true)
     } else {
-      // それ以外は操作を無効化
       this.camera.detachControl()
+      // 選択モードに戻るときは初期の向きに戻す
+      this.camera.rotation.y = this.initialRotationY
     }
   }
 
   updateCamera(playerPosition: BABYLON.Vector3): void {
-    // プレイヤーの位置を中心に設定（高さオフセット付き）
-    const targetPosition = playerPosition.clone()
-    targetPosition.y += this.CAMERA_HEIGHT_OFFSET / 2 // プレイヤーの少し上を見る
-    this.camera.target = targetPosition
+    // プレイヤーの位置にオフセットを加えてカメラを配置
+    const targetPosition = playerPosition.add(this.cameraOffset)
+    this.camera.position = targetPosition
+
+    // プレイヤーの位置を注視点として設定
+    const lookAtPosition = playerPosition.clone()
+    lookAtPosition.y += 2 // プレイヤーの少し上を見る
+    this.camera.setTarget(lookAtPosition)
   }
 
-  getCamera(): BABYLON.ArcRotateCamera {
+  getCamera(): BABYLON.FreeCamera {
     return this.camera
   }
 
   getDirection(): BABYLON.Vector3 {
-    // カメラの向きから前方向を取得（Y成分を0にして水平方向のみ）
-    const direction = this.camera.target.subtract(this.camera.position)
-    direction.y = 0
-    return direction.normalize()
+    return this.camera.getDirection(BABYLON.Vector3.Forward())
   }
 
   getRightDirection(): BABYLON.Vector3 {
-    const forward = this.getDirection()
-    return BABYLON.Vector3.Cross(forward, BABYLON.Vector3.Up()).normalize()
+    return this.camera.getDirection(BABYLON.Vector3.Right())
   }
 
   dispose(): void {

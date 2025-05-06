@@ -101,10 +101,19 @@ export class Player {
   }
 
   move(
-    forward: BABYLON.Vector3,
-    right: BABYLON.Vector3,
+    cameraForward: BABYLON.Vector3,
+    cameraRight: BABYLON.Vector3,
     inputMap: { [key: string]: boolean },
   ): void {
+    // カメラの前方向と右方向を取得（Y成分を0にして水平面上の移動のみを考慮）
+    const forward = cameraForward.clone()
+    forward.y = 0
+    forward.normalize()
+
+    const right = cameraRight.clone()
+    right.y = 0
+    right.normalize()
+
     this.movementDirection = BABYLON.Vector3.Zero()
 
     if (inputMap['w']) {
@@ -114,10 +123,10 @@ export class Player {
       this.movementDirection.addInPlace(forward.scale(-MOVE_SPEED))
     }
     if (inputMap['a']) {
-      this.movementDirection.addInPlace(right.scale(-MOVE_SPEED)) // 左方向
+      this.movementDirection.addInPlace(right.scale(-MOVE_SPEED))
     }
     if (inputMap['d']) {
-      this.movementDirection.addInPlace(right.scale(MOVE_SPEED)) // 右方向
+      this.movementDirection.addInPlace(right.scale(MOVE_SPEED))
     }
 
     if (this.movementDirection.lengthSquared() > 0.01) {
