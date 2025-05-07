@@ -11,6 +11,10 @@ export class CameraController {
   public mode: Ref<CameraMode>
   private cameraOffset: BABYLON.Vector3
   private initialRotationY: number
+  private orbitAngleX: number = 0
+  private orbitAngleY: number = Math.PI
+  private orbitRadius: number = 15
+  private currentTargetPosition: BABYLON.Vector3
   private onModeChange: (mode: CameraMode) => void
   private isDragging: boolean = false
   private lastPointerX: number = 0
@@ -26,6 +30,7 @@ export class CameraController {
     this.mode = ref<CameraMode>('select')
     this.onModeChange = onModeChange
     this.cameraOffset = new BABYLON.Vector3(0, 8, -15) // 後ろ上から見下ろす
+    this.currentTargetPosition = BABYLON.Vector3.Zero()
     this.initialRotationY = Math.PI
     this.camera = this.createCamera()
     this.setupModeToggle()
@@ -62,9 +67,14 @@ export class CameraController {
             if (this.isDragging) {
               const dx = pointerInfo.event.clientX - this.lastPointerX
               const dy = pointerInfo.event.clientY - this.lastPointerY
-              
-              this.camera.rotation.y += dx * 0.002
-              this.camera.rotation.x += dy * 0.002
+
+              // 水平回転（Y軸）
+              this.orbitAngleY += dx * 0.002
+              // 垂直回転（X軸）- 上下の回転を制限
+              this.orbitAngleX = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, this.orbitAngleX + dy * 0.002))
+
+              // カメラ位置の更新
+              this.updateOrbitCamera()
               
               this.lastPointerX = pointerInfo.event.clientX
               this.lastPointerY = pointerInfo.event.clientY
@@ -110,17 +120,29 @@ export class CameraController {
   }
 
   updateCamera(playerPosition: BABYLON.Vector3): void {
-    // 選択モードの時のみカメラを自動更新
+    this.currentTargetPosition = playerPosition.clone()
+    this.currentTargetPosition.y += 2 // プレイヤーの少し上を見る
+
     if (this.mode.value === 'select') {
       // プレイヤーの位置にオフセットを加えてカメラを配置
       const targetPosition = playerPosition.add(this.cameraOffset)
       this.camera.position = targetPosition
-
-      // プレイヤーの位置を注視点として設定
-      const lookAtPosition = playerPosition.clone()
-      lookAtPosition.y += 2 // プレイヤーの少し上を見る
-      this.camera.setTarget(lookAtPosition)
+      this.camera.setTarget(this.currentTargetPosition)
+    } else {
+      // 軌道カメラの更新
+      this.updateOrbitCamera()
     }
+  }
+
+  private updateOrbitCamera(): void {
+    // 球面座標から直交座標への変換
+    const x = this.orbitRadius * Math.cos(this.orbitAngleX) * Math.sin(this.orbitAngleY)
+    const y = this.orbitRadius * Math.sin(this.orbitAngleX)
+    const z = this.orbitRadius * Math.cos(this.orbitAngleX) * Math.cos(this.orbitAngleY)
+
+    // カメラ位置の更新（プレイヤーの位置を基準に）
+    this.camera.position = this.currentTargetPosition.add(new BABYLON.Vector3(x, y, z))
+    this.camera.setTarget(this.currentTargetPosition)
   }
 
   getCamera(): BABYLON.FreeCamera {
