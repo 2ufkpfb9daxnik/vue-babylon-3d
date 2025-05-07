@@ -4,6 +4,10 @@
     <div class="debug-section">
       <h3>システム情報</h3>
       <p>FPS: {{ fps }}</p>
+      <button
+        class="mode-button"
+        @click="cameraController?.toggleMode()"
+      >操作モード: {{ cameraMode === 'view' ? '視点操作' : '移動入力' }}</button>
     </div>
     <div class="debug-section">
       <h3>座標情報</h3>
@@ -23,12 +27,37 @@
       <h3>入力状態</h3>
       <div class="key-grid">
         <div></div>
-        <div class="key-cell">{{ isKeyPressed('w') ? '▲' : '△' }}</div>
+        <button
+          class="key-cell key-button"
+          @mousedown="handleKeyPress('w')"
+          @mouseup="handleKeyRelease('w')"
+          @mouseleave="handleKeyRelease('w')"
+        >{{ isKeyPressed('w') ? '▲' : '△' }}</button>
         <div></div>
-        <div class="key-cell">{{ isKeyPressed('a') ? '◀' : '◁' }}</div>
-        <div class="key-cell">{{ isKeyPressed('s') ? '▼' : '▽' }}</div>
-        <div class="key-cell">{{ isKeyPressed('d') ? '▶' : '▷' }}</div>
-        <div class="key-cell">Space: {{ isKeyPressed(' ') ? '■' : '□' }}</div>
+        <button
+          class="key-cell key-button"
+          @mousedown="handleKeyPress('a')"
+          @mouseup="handleKeyRelease('a')"
+          @mouseleave="handleKeyRelease('a')"
+        >{{ isKeyPressed('a') ? '◀' : '◁' }}</button>
+        <button
+          class="key-cell key-button"
+          @mousedown="handleKeyPress('s')"
+          @mouseup="handleKeyRelease('s')"
+          @mouseleave="handleKeyRelease('s')"
+        >{{ isKeyPressed('s') ? '▼' : '▽' }}</button>
+        <button
+          class="key-cell key-button"
+          @mousedown="handleKeyPress('d')"
+          @mouseup="handleKeyRelease('d')"
+          @mouseleave="handleKeyRelease('d')"
+        >{{ isKeyPressed('d') ? '▶' : '▷' }}</button>
+        <button
+          class="key-cell key-button"
+          @mousedown="handleKeyPress(' ')"
+          @mouseup="handleKeyRelease(' ')"
+          @mouseleave="handleKeyRelease(' ')"
+        >Space: {{ isKeyPressed(' ') ? '■' : '□' }}</button>
       </div>
     </div>
   </div>
@@ -36,6 +65,18 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, reactive } from 'vue'
+// キー入力ハンドラー
+const handleKeyPress = (key: string) => {
+  if (inputController) {
+    inputController.simulateKeyPress(key)
+  }
+}
+
+const handleKeyRelease = (key: string) => {
+  if (inputController) {
+    inputController.simulateKeyRelease(key)
+  }
+}
 import * as BABYLON from '@babylonjs/core'
 import { TerrainGenerator } from '../world/TerrainGenerator'
 import { Player } from '../entities/Player'
@@ -46,6 +87,7 @@ import { SPAWN_POSITION } from '../constants/world'
 
 const renderCanvas = ref<HTMLCanvasElement | null>(null)
 const showDebug = ref(true)
+const cameraMode = ref<'view' | 'select'>('select')
 let engine: BABYLON.Engine
 let scene: BABYLON.Scene
 let player: Player
@@ -53,6 +95,11 @@ let cameraController: CameraController | null = null
 let inputController: InputController
 let terrainGenerator: TerrainGenerator
 let boundaryWalls: BoundaryWalls
+
+// カメラモードの更新用関数
+const updateCameraMode = (mode: 'view' | 'select') => {
+  cameraMode.value = mode
+}
 
 // 状態管理
 const position = reactive({ x: SPAWN_POSITION.x, y: SPAWN_POSITION.y, z: SPAWN_POSITION.z })
@@ -78,7 +125,12 @@ const createScene = async (canvas: HTMLCanvasElement) => {
     // コンポーネントの初期化
     inputController = new InputController(scene)
     terrainGenerator = new TerrainGenerator(scene)
-    cameraController = new CameraController(scene, canvas)
+    cameraController = new CameraController(scene, canvas, updateCameraMode)
+
+    // Cキーでのモード切り替えを設定
+    inputController.setOnCKeyPress(() => {
+      cameraController?.toggleMode()
+    })
 
     // 地形の生成
     terrainGenerator.createNaturalTerrain()
@@ -139,8 +191,17 @@ onMounted(async () => {
       const scene = await createScene(renderCanvas.value)
       engine.runRenderLoop(() => scene.render())
 
+      // キャンバスにフォーカスを設定
+      renderCanvas.value.tabIndex = 1
+      renderCanvas.value.focus()
+
       window.addEventListener('resize', () => {
         engine.resize()
+      })
+
+      // クリック時にフォーカスを設定
+      renderCanvas.value.addEventListener('click', () => {
+        renderCanvas.value?.focus()
       })
     } catch (error) {
       console.error('Initialization error:', error)
@@ -162,6 +223,11 @@ canvas {
   height: 100vh;
   display: block;
   touch-action: none;
+  outline: none; /* フォーカス時の青い枠を削除 */
+}
+
+canvas:focus {
+  outline: none;
 }
 
 .debug-panel {
@@ -204,5 +270,38 @@ canvas {
   background-color: rgba(255, 255, 255, 0.1);
   padding: 5px;
   border-radius: 3px;
+}
+
+.key-button {
+  border: none;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  width: 100%;
+  font-family: monospace;
+}
+
+.key-button:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.key-button:active {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+.mode-button {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 12px;
+  padding: 0;
+  text-align: left;
+  transition: color 0.2s;
+}
+
+.mode-button:hover {
+  color: #00ff00;
 }
 </style>
